@@ -116,34 +116,22 @@
 
         function handlePinSubmit() {
             state.pinError = '';
+            const correctPin = '2116';
+            
             if (!state.pinInput) {
                 state.pinError = 'Please enter a PIN';
                 render();
                 return;
             }
-            if (!state.storedPin) {
-                if (state.pinInput.length < 4) {
-                    state.pinError = 'PIN must be at least 4 digits';
-                    render();
-                    return;
-                }
-                storage.set('app-pin', state.pinInput);
-                state.storedPin = state.pinInput;
+            
+            if (state.pinInput === correctPin) {
                 state.isAuthenticated = true;
                 state.pinInput = '';
                 loadAssets();
                 loadArchivedAssets();
                 loadFolders();
             } else {
-                if (state.pinInput === state.storedPin) {
-                    state.isAuthenticated = true;
-                    state.pinInput = '';
-                    loadAssets();
-                    loadArchivedAssets();
-                    loadFolders();
-                } else {
-                    state.pinError = 'Incorrect PIN';
-                }
+                state.pinError = 'Incorrect PIN';
             }
             render();
         }
