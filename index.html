@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Office Asset Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="app"></div>
+
+    <script>
+        // LocalStorage wrapper to simulate the storage API
+        const storage = {
+            get: (key) => {
+                const value = localStorage.getItem(key);
+                return value ? { key, value } : null;
+            },
+            set: (key, value) => {
+                localStorage.setItem(key, value);
+                return { key, value };
+            },
+            delete: (key) => {
+                localStorage.removeItem(key);
+                return { key, deleted: true };
+            },
+            list: (prefix) => {
+                const keys = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (!prefix || key.startsWith(prefix)) {
+                        keys.push(key);
+                    }
+                }
+                return { keys };
+            }
+        };
+
+        // Simple icon components
+        const icons = {
+            Lock: () => `<svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>`,
+            Package: () => `<svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>`,
+            Plus: () => `<svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>`,
+            Search: () => `<svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>`,
+            X: () => `<svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`,
+            Edit2: () => `<svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>`,
+            MapPin: () => `<svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>`,
+            Tag: () => `<svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>`,
+            Users: () => `<svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>`,
+            BarChart3: () => `<svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>`,
+            FolderOpen: () => `<svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"></path></svg>`,
+            Grid3x3: () => `<svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"></path></svg>`,
+            List: () => `<svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>`,
+            Scan: () => `<svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>`,
+            Camera: () => `<svg class="w-full h-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>`
+        };
+
+        // State
+        let state = {
+            isAuthenticated: false,
+            pinInput: '',
+            pinError: '',
+            storedPin: '',
+            assets: [],
+            archivedAssets: [],
+            folders: [],
+            currentFolder: null,
+            viewMode: 'grid',
+            showAssetDetail: false,
+            selectedAsset: null,
+            showAddAsset: false,
+            showEditAsset: false,
+            showAddFolder: false,
+            showScanner: false,
+            showDashboard: false,
+            showArchive: false,
+            showArchiveDialog: false,
+            archiveReason: '',
+            archiveDescription: '',
+            searchTerm: '',
+            filterStatus: 'all',
+            scannedCode: '',
+            formData: {
+                name: '',
+                type: 'computer',
+                location: '',
+                status: 'active',
+                serialNumber: '',
+                barcode: '',
+                assignedTo: '',
+                notes: '',
+                condition: 'good',
+                purchaseDate: '',
+                folderId: null
+            },
+            folderForm: { name: '', parentId: null }
+        };
+
+        // Initialize
+        function init() {
+            checkPin();
+            render();
+        }
+
+        function checkPin() {
+            const result = storage.get('app-pin');
+            if (result) state.storedPin = result.value;
+        }
+
+        function handlePinSubmit() {
+            state.pinError = '';
+            if (!state.pinInput) {
+                state.pinError = 'Please enter a PIN';
+                render();
+                return;
+            }
+            if (!state.storedPin) {
+                if (state.pinInput.length < 4) {
+                    state.pinError = 'PIN must be at least 4 digits';
+                    render();
+                    return;
+                }
+                storage.set('app-pin', state.pinInput);
+                state.storedPin = state.pinInput;
+                state.isAuthenticated = true;
+                state.pinInput = '';
+                loadAssets();
+                loadArchivedAssets();
+                loadFolders();
+            } else {
+                if (state.pinInput === state.storedPin) {
+                    state.isAuthenticated = true;
+                    state.pinInput = '';
+                    loadAssets();
+                    loadArchivedAssets();
+                    loadFolders();
+                } else {
+                    state.pinError = 'Incorrect PIN';
+                }
+            }
+            render();
+        }
+
+        function loadAssets() {
+            const result = storage.list('asset:');
+            if (result && result.keys) {
+                state.assets = result.keys.map(key => {
+                    const data = storage.get(key);
+                    return data ? JSON.parse(data.value) : null;
+                }).filter(a => a !== null);
+            }
+        }
+
+        function loadFolders() {
+            const result = storage.list('folder:');
+            if (result && result.keys) {
+                state.folders = result.keys.map(key => {
+                    const data = storage.get(key);
+                    return data ? JSON.parse(data.value) : null;
+                }).filter(f => f !== null);
+            }
+        }
+
+        function loadArchivedAssets() {
+            const result = storage.list('archived:');
+            if (result && result.keys) {
+                state.archivedAssets = result.keys.map(key => {
+                    const data = storage.get(key);
+                    return data ? JSON.parse(data.value) : null;
+                }).filter(a => a !== null);
+            }
+        }
+
+        function handleAddAsset() {
+            if (!state.formData.name) {
+                alert('Please enter asset name');
+                return;
+            }
+            const asset = {
+                ...state.formData,
+                id: `asset_${Date.now()}`,
+                createdAt: new Date().toISOString(),
+                lastModifiedAt: new Date().toISOString()
+            };
+            storage.set(`asset:${asset.id}`, JSON.stringify(asset));
+            if (asset.barcode) {
+                storage.set(`barcode:${asset.barcode}`, asset.id);
+            }
+            loadAssets();
+            state.showAddAsset = false;
+            state.formData = {
+                name: '',
+                type: 'computer',
+                location: '',
+                status: 'active',
+                serialNumber: '',
+                barcode: '',
+                assignedTo: '',
+                notes: '',
+                condition: 'good',
+                purchaseDate: '',
+                folderId: state.currentFolder
+            };
+            render();
+        }
+
+        function handleAddFolder() {
+            if (!state.folderForm.name) {
+                alert('Please enter folder name');
+                return;
+            }
+            const folder = {
+                id: `folder_${Date.now()}`,
+                name: state.folderForm.name,
+                parentId: state.folderForm.parentId,
+                createdAt: new Date().toISOString()
+            };
+            storage.set(`folder:${folder.id}`, JSON.stringify(folder));
+            loadFolders();
+            state.showAddFolder = false;
+            state.folderForm = { name: '', parentId: null };
+            render();
+        }
+
+        function handleEditAsset(asset) {
+            state.selectedAsset = asset;
+            state.formData = {
+                name: asset.name,
+                type: asset.type,
+                location: asset.location,
+                status: asset.status,
+                serialNumber: asset.serialNumber || '',
+                barcode: asset.barcode || '',
+                assignedTo: asset.assignedTo || '',
+                notes: asset.notes || '',
+                condition: asset.condition || 'good',
+                purchaseDate: asset.purchaseDate || '',
+                folderId: asset.folderId || null
+            };
+            state.showEditAsset = true;
+            state.showAssetDetail = false;
+            render();
+        }
+
+        function handleUpdateAsset() {
+            if (!state.formData.name) {
+                alert('Please enter asset name');
+                return;
+            }
+            const asset = {
+                ...state.selectedAsset,
+                ...state.formData,
+                lastModifiedAt: new Date().toISOString()
+            };
+            storage.set(`asset:${asset.id}`, JSON.stringify(asset));
+            if (asset.barcode) {
+                storage.set(`barcode:${asset.barcode}`, asset.id);
+            }
+            loadAssets();
+            state.showEditAsset = false;
+            state.selectedAsset = null;
+            render();
+        }
+
+        function handleArchiveAsset() {
+            if (!state.selectedAsset) return;
+            
+            const archivedAsset = {
+                ...state.selectedAsset,
+                archivedAt: new Date().toISOString(),
+                archiveReason: state.archiveReason || 'No reason provided',
+                archiveDescription: state.archiveDescription || ''
+            };
+            
+            storage.set(`archived:${state.selectedAsset.id}`, JSON.stringify(archivedAsset));
+            storage.delete(`asset:${state.selectedAsset.id}`);
+            
+            loadAssets();
+            loadArchivedAssets();
+            
+            state.showArchiveDialog = false;
+            state.showEditAsset = false;
+            state.archiveReason = '';
+            state.archiveDescription = '';
+            state.selectedAsset = null;
+            alert('Asset archived successfully');
+            render();
+        }
+
+        function handleRestoreFromArchive(assetId) {
+            const result = storage.get(`archived:${assetId}`);
+            if (result) {
+                const asset = JSON.parse(result.value);
+                const restoredAsset = { ...asset };
+                delete restoredAsset.archivedAt;
+                delete restoredAsset.archiveReason;
+                delete restoredAsset.archiveDescription;
+                
+                storage.set(`asset:${assetId}`, JSON.stringify(restoredAsset));
+                storage.delete(`archived:${assetId}`);
+                
+                loadAssets();
+                loadArchivedAssets();
+                alert('Asset restored successfully');
+                render();
+            }
+        }
+
+        function handleScanBarcode() {
+            if (!state.scannedCode) return;
+            const result = storage.get(`barcode:${state.scannedCode}`);
+            if (result) {
+                const assetData = storage.get(`asset:${result.value}`);
+                if (assetData) {
+                    const asset = JSON.parse(assetData.value);
+                    state.selectedAsset = asset;
+                    state.showAssetDetail = true;
+                    state.showScanner = false;
+                    state.scannedCode = '';
+                    render();
+                    return;
+                }
+            }
+            alert('Asset not found');
+        }
+
+        function getAssetsByFolder() {
+            if (!state.currentFolder) return state.assets;
+            return state.assets.filter(a => a.folderId === state.currentFolder);
+        }
+
+        function getFilteredAssets() {
+            return getAssetsByFolder().filter(asset => {
+                const matchesSearch = asset.name.toLowerCase().includes(state.searchTerm.toLowerCase()) ||
+                                     (asset.serialNumber && asset.serialNumber.toLowerCase().includes(state.searchTerm.toLowerCase())) ||
+                                     (asset.barcode && asset.barcode.toLowerCase().includes(state.searchTerm.toLowerCase()));
+                const matchesStatus = state.filterStatus === 'all' || asset.status === state.filterStatus;
+                return matchesSearch && matchesStatus;
+            });
+        }
+
+        function getStatusColor(status) {
+            if (status === 'active') return 'bg-green-100 text-green-800';
+            if (status === 'maintenance') return 'bg-yellow-100 text-yellow-800';
+            if (status === 'retired') return 'bg-gray-100 text-gray-800';
+            if (status === 'in-repair') return 'bg-orange-100 text-orange-800';
+            return 'bg-blue-100 text-blue-800';
+        }
+
+        // Render
+        function render() {
+            const app = document.getElementById('app');
+            
+            if (!state.isAuthenticated) {
+                app.innerHTML = renderPinScreen();
+            } else {
+                app.innerHTML = renderMainApp();
+            }
+            
+            attachEventListeners();
+        }
+
+        function renderPinScreen() {
+            return `
+                <div class="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+                    <div class="bg-white rounded-xl shadow-lg p-8 w-full max-w-md">
+                        <div class="flex items-center justify-center mb-6">
+                            <div class="bg-blue-100 p-4 rounded-full">
+                                <div class="w-10 h-10 text-blue-600">${icons.Lock()}</div>
+                            </div>
+                        </div>
+                        <h1 class="text-3xl font-bold text-center text-gray-900 mb-2">Asset Tracker</h1>
+                        <p class="text-center text-gray-600 mb-8">
+                            ${state.storedPin ? 'Enter your PIN to continue' : 'Set up your PIN to get started'}
+                        </p>
+                        <input
+                            type="password"
+                            id="pinInput"
+                            value="${state.pinInput}"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg text-center text-2xl tracking-widest mb-4"
+                            placeholder="••••"
+                            maxlength="8"
+                        />
+                        ${state.pinError ? `<div class="text-red-600 text-sm text-center mb-4">${state.pinError}</div>` : ''}
+                        <button
+                            id="pinSubmit"
+                            class="w-full bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 font-medium"
+                        >
+                            ${state.storedPin ? 'Unlock' : 'Create PIN'}
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderMainApp() {
+            const filteredAssets = getFilteredAssets();
+            
+            return `
+                <div class="min-h-screen bg-gray-50 flex">
+                    <!-- Sidebar -->
+                    <div class="w-64 bg-white border-r border-gray-200 flex flex-col">
+                        <div class="p-6 border-b border-gray-200">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 text-blue-600">${icons.Package()}</div>
+                                <h1 class="text-xl font-bold text-gray-900">Asset Tracker</h1>
+                            </div>
+                        </div>
+                        
+                        <nav class="flex-1 p-4 overflow-y-auto">
+                            <div class="space-y-1">
+                                <button onclick="setCurrentFolder(null)" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left ${state.currentFolder === null ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}">
+                                    <div class="w-5 h-5">${icons.Package()}</div>
+                                    <span class="font-medium">All Assets</span>
+                                    <span class="ml-auto text-sm text-gray-500">${state.assets.length}</span>
+                                </button>
+                                
+                                <button onclick="toggleDashboard()" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-gray-700 hover:bg-gray-50">
+                                    <div class="w-5 h-5">${icons.BarChart3()}</div>
+                                    <span class="font-medium">Dashboard</span>
+                                </button>
+                                
+                                <button onclick="toggleArchive()" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left text-gray-700 hover:bg-gray-50">
+                                    <div class="w-5 h-5">${icons.Package()}</div>
+                                    <span class="font-medium">Archive</span>
+                                    <span class="ml-auto text-sm text-gray-500">${state.archivedAssets.length}</span>
+                                </button>
+                            </div>
+                            
+                            <div class="mt-6">
+                                <div class="flex items-center justify-between px-4 mb-2">
+                                    <span class="text-xs font-semibold text-gray-500 uppercase">Folders</span>
+                                    <button onclick="toggleAddFolder()" class="text-gray-400 hover:text-gray-600">
+                                        <div class="w-4 h-4">${icons.Plus()}</div>
+                                    </button>
+                                </div>
+                                <div class="space-y-1">
+                                    ${state.folders.map(folder => `
+                                        <button onclick="setCurrentFolder('${folder.id}')" class="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-left ${state.currentFolder === folder.id ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}">
+                                            <div class="w-4 h-4">${icons.FolderOpen()}</div>
+                                            <span class="text-sm">${folder.name}</span>
+                                            <span class="ml-auto text-xs text-gray-500">
+                                                ${state.assets.filter(a => a.folderId === folder.id).length}
+                                            </span>
+                                        </button>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </nav>
+                    </div>
+                    
+                    <!-- Main Content -->
+                    <div class="flex-1 flex flex-col">
+                        <!-- Header -->
+                        <div class="bg-white border-b border-gray-200 px-6 py-4">
+                            <div class="flex items-center justify-between gap-4">
+                                <div class="flex-1 max-w-2xl relative">
+                                    <div class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5">${icons.Search()}</div>
+                                    <input
+                                        type="text"
+                                        id="searchInput"
+                                        placeholder="Search assets..."
+                                        value="${state.searchTerm}"
+                                        class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg"
+                                    />
+                                </div>
+                                
+                                <div class="flex items-center gap-2">
+                                    <select id="filterStatus" class="px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                                        <option value="all" ${state.filterStatus === 'all' ? 'selected' : ''}>All Status</option>
+                                        <option value="active" ${state.filterStatus === 'active' ? 'selected' : ''}>Active</option>
+                                        <option value="maintenance" ${state.filterStatus === 'maintenance' ? 'selected' : ''}>Maintenance</option>
+                                        <option value="in-repair" ${state.filterStatus === 'in-repair' ? 'selected' : ''}>In Repair</option>
+                                        <option value="retired" ${state.filterStatus === 'retired' ? 'selected' : ''}>Retired</option>
+                                    </select>
+                                    
+                                    <div class="flex items-center border border-gray-300 rounded-lg">
+                                        <button onclick="setViewMode('grid')" class="p-2 ${state.viewMode === 'grid' ? 'bg-gray-100' : ''}">
+                                            <div class="w-5 h-5 text-gray-600">${icons.Grid3x3()}</div>
+                                        </button>
+                                        <button onclick="setViewMode('list')" class="p-2 ${state.viewMode === 'list' ? 'bg-gray-100' : ''}">
+                                            <div class="w-5 h-5 text-gray-600">${icons.List()}</div>
+                                        </button>
+                                    </div>
+                                    
+                                    <button onclick="toggleScanner()" class="p-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                                        <div class="w-5 h-5 text-gray-600">${icons.Scan()}</div>
+                                    </button>
+                                    
+                                    <button onclick="toggleAddAsset()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 font-medium">
+                                        <div class="w-5 h-5">${icons.Plus()}</div>
+                                        Add Asset
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Assets Grid/List -->
+                        <div class="flex-1 overflow-y-auto p-6">
+                            <div class="mb-4">
+                                <div class="text-sm text-gray-600">
+                                    ${filteredAssets.length} assets
+                                </div>
+                            </div>
+                            
+                            ${filteredAssets.length === 0 ? `
+                                <div class="flex flex-col items-center justify-center py-16">
+                                    <div class="w-16 h-16 text-gray-300 mb-4">${icons.Package()}</div>
+                                    <p class="text-gray-500 text-lg mb-2">No assets found</p>
+                                    <button onclick="toggleAddAsset()" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 flex items-center gap-2">
+                                        <div class="w-5 h-5">${icons.Plus()}</div>
+                                        Add Asset
+                                    </button>
+                                </div>
+                            ` : state.viewMode === 'grid' ? `
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                    ${filteredAssets.map(asset => `
+                                        <div onclick="viewAssetDetail('${asset.id}')" class="bg-white rounded-lg border border-gray-200 hover:shadow-md cursor-pointer overflow-hidden">
+                                            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 h-32 flex items-center justify-center">
+                                                <div class="w-16 h-16 text-blue-300">${icons.Package()}</div>
+                                            </div>
+                                            <div class="p-4">
+                                                <div class="flex items-start justify-between mb-2">
+                                                    <h3 class="font-semibold text-gray-900 text-sm">${asset.name}</h3>
+                                                    <span class="px-2 py-1 rounded text-xs font-medium ${getStatusColor(asset.status)}">
+                                                        ${asset.status}
+                                                    </span>
+                                                </div>
+                                                <div class="space-y-1 text-xs text-gray-600">
+                                                    <div class="flex items-center gap-2">
+                                                        <div class="w-3 h-3">${icons.Tag()}</div>
+                                                        <span class="capitalize">${asset.type}</span>
+                                                    </div>
+                                                    ${asset.location ? `
+                                                        <div class="flex items-center gap-2">
+                                                            <div class="w-3 h-3">${icons.MapPin()}</div>
+                                                            <span>${asset.location}</span>
+                                                        </div>
+                                                    ` : ''}
+                                                    ${asset.assignedTo ? `
+                                                        <div class="flex items-center gap-2">
+                                                            <div class="w-3 h-3">${icons.Users()}</div>
+                                                            <span>${asset.assignedTo}</span>
+                                                        </div>
+                                                    ` : ''}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : `
+                                <div class="bg-white rounded-lg border border-gray-200">
+                                    ${filteredAssets.map((asset, index) => `
+                                        <div onclick="viewAssetDetail('${asset.id}')" class="flex items-center gap-4 p-4 hover:bg-gray-50 cursor-pointer ${index !== filteredAssets.length - 1 ? 'border-b border-gray-100' : ''}">
+                                            <div class="w-12 h-12 bg-gradient-to-br from-blue-50 to-indigo-50 rounded flex items-center justify-center">
+                                                <div class="w-6 h-6 text-blue-400">${icons.Package()}</div>
+                                            </div>
+                                            <div class="flex-1">
+                                                <h3 class="font-semibold text-gray-900">${asset.name}</h3>
+                                                <div class="flex items-center gap-4 text-xs text-gray-600 mt-1">
+                                                    <span class="capitalize">${asset.type}</span>
+                                                    ${asset.location ? `<span>${asset.location}</span>` : ''}
+                                                </div>
+                                            </div>
+                                            <span class="px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(asset.status)}">
+                                                ${asset.status}
+                                            </span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                    
+                    <!-- Modals -->
+                    ${state.showAddAsset ? renderAddAssetModal() : ''}
+                    ${state.showAssetDetail ? renderAssetDetailModal() : ''}
+                    ${state.showEditAsset ? renderEditAssetModal() : ''}
+                    ${state.showAddFolder ? renderAddFolderModal() : ''}
+                    ${state.showScanner ? renderScannerModal() : ''}
+                    ${state.showDashboard ? renderDashboardModal() : ''}
+                    ${state.showArchive ? renderArchiveModal() : ''}
+                    ${state.showArchiveDialog ? renderArchiveDialog() : ''}
+                </div>
+            `;
+        }
+
+        function renderAddAssetModal() {
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div class="px-6 py-4 border-b flex items-center justify-between">
+                            <h2 class="text-xl font-bold">Add New Asset</h2>
+                            <button onclick="toggleAddAsset()">
+                                <div class="w-6 h-6">${icons.X()}</div>
+                            </button>
+                        </div>
+                        <div class="p-6">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="col-span-2">
+                                    <label class="block text-sm font-medium mb-1">Asset Name</label>
+                                    <input type="text" id="assetName" value="${state.formData.name}" class="w-full px-3 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Type</label>
+                                    <select id="assetType" class="w-full px-3 py-2 border rounded-lg">
+                                        <option value="computer" ${state.formData.type === 'computer' ? 'selected' : ''}>Computer</option>
+                                        <option value="laptop" ${state.formData.type === 'laptop' ? 'selected' : ''}>Laptop</option>
+                                        <option value="printer" ${state.formData.type === 'printer' ? 'selected' : ''}>Printer</option>
+                                        <option value="monitor" ${state.formData.type === 'monitor' ? 'selected' : ''}>Monitor</option>
+                                        <option value="other" ${state.formData.type === 'other' ? 'selected' : ''}>Other</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Status</label>
+                                    <select id="assetStatus" class="w-full px-3 py-2 border rounded-lg">
+                                        <option value="active" ${state.formData.status === 'active' ? 'selected' : ''}>Active</option>
+                                        <option value="maintenance" ${state.formData.status === 'maintenance' ? 'selected' : ''}>Maintenance</option>
+                                        <option value="in-repair" ${state.formData.status === 'in-repair' ? 'selected' : ''}>In Repair</option>
+                                        <option value="retired" ${state.formData.status === 'retired' ? 'selected' : ''}>Retired</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Location</label>
+                                    <input type="text" id="assetLocation" value="${state.formData.location}" class="w-full px-3 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Assigned To</label>
+                                    <input type="text" id="assetAssignedTo" value="${state.formData.assignedTo}" class="w-full px-3 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Barcode</label>
+                                    <input type="text" id="assetBarcode" value="${state.formData.barcode}" class="w-full px-3 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Serial Number</label>
+                                    <input type="text" id="assetSerialNumber" value="${state.formData.serialNumber}" class="w-full px-3 py-2 border rounded-lg" />
+                                </div>
+                            </div>
+                            <div class="flex gap-3 mt-6">
+                                <button onclick="submitAddAsset()" class="flex-1 bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700">
+                                    Add Asset
+                                </button>
+                                <button onclick="toggleAddAsset()" class="px-6 py-3 border rounded-lg">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAssetDetailModal() {
+            const asset = state.selectedAsset;
+            if (!asset) return '';
+            
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                        <div class="px-6 py-4 border-b flex items-center justify-between">
+                            <h2 class="text-xl font-bold">Asset Details</h2>
+                            <button onclick="closeAssetDetail()">
+                                <div class="w-6 h-6">${icons.X()}</div>
+                            </button>
+                        </div>
+                        <div class="p-6">
+                            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg h-48 flex items-center justify-center mb-6">
+                                <div class="w-24 h-24 text-blue-300">${icons.Package()}</div>
+                            </div>
+                            <h3 class="text-2xl font-bold mb-4">${asset.name}</h3>
+                            <div class="grid grid-cols-2 gap-4 mb-6">
+                                <div>
+                                    <div class="text-sm text-gray-500">Type</div>
+                                    <div class="font-medium capitalize">${asset.type}</div>
+                                </div>
+                                <div>
+                                    <div class="text-sm text-gray-500">Status</div>
+                                    <div class="font-medium capitalize">${asset.status}</div>
+                                </div>
+                                ${asset.location ? `
+                                    <div>
+                                        <div class="text-sm text-gray-500">Location</div>
+                                        <div class="font-medium">${asset.location}</div>
+                                    </div>
+                                ` : ''}
+                                ${asset.assignedTo ? `
+                                    <div>
+                                        <div class="text-sm text-gray-500">Assigned To</div>
+                                        <div class="font-medium">${asset.assignedTo}</div>
+                                    </div>
+                                ` : ''}
+                                ${asset.serialNumber ? `
+                                    <div>
+                                        <div class="text-sm text-gray-500">Serial Number</div>
+                                        <div class="font-medium">${asset.serialNumber}</div>
+                                    </div>
+                                ` : ''}
+                                ${asset.barcode ? `
+                                    <div>
+                                        <div class="text-sm text-gray-500">Barcode</div>
+                                        <div class="font-medium">${asset.barcode}</div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                            ${asset.notes ? `
+                                <div class="mb-6">
+                                    <div class="text-sm text-gray-500 mb-1">Notes</div>
+                                    <div class="text-gray-700">${asset.notes}</div>
+                                </div>
+                            ` : ''}
+                            <div class="flex gap-3">
+                                <button onclick="editAsset('${asset.id}')" class="flex-1 bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700">
+                                    Edit Asset
+                                </button>
+                                <button onclick="closeAssetDetail()" class="px-6 py-3 border rounded-lg">
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderEditAssetModal() {
+            const asset = state.selectedAsset;
+            if (!asset) return '';
+            
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div class="px-6 py-4 border-b flex items-center justify-between">
+                            <h2 class="text-xl font-bold">Edit Asset</h2>
+                            <button onclick="closeEditAsset()">
+                                <div class="w-6 h-6">${icons.X()}</div>
+                            </button>
+                        </div>
+                        <div class="p-6">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="col-span-2">
+                                    <label class="block text-sm font-medium mb-1">Asset Name</label>
+                                    <input type="text" id="editAssetName" value="${state.formData.name}" class="w-full px-3 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Type</label>
+                                    <select id="editAssetType" class="w-full px-3 py-2 border rounded-lg">
+                                        <option value="computer" ${state.formData.type === 'computer' ? 'selected' : ''}>Computer</option>
+                                        <option value="laptop" ${state.formData.type === 'laptop' ? 'selected' : ''}>Laptop</option>
+                                        <option value="printer" ${state.formData.type === 'printer' ? 'selected' : ''}>Printer</option>
+                                        <option value="monitor" ${state.formData.type === 'monitor' ? 'selected' : ''}>Monitor</option>
+                                        <option value="other" ${state.formData.type === 'other' ? 'selected' : ''}>Other</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Status</label>
+                                    <select id="editAssetStatus" class="w-full px-3 py-2 border rounded-lg">
+                                        <option value="active" ${state.formData.status === 'active' ? 'selected' : ''}>Active</option>
+                                        <option value="maintenance" ${state.formData.status === 'maintenance' ? 'selected' : ''}>Maintenance</option>
+                                        <option value="in-repair" ${state.formData.status === 'in-repair' ? 'selected' : ''}>In Repair</option>
+                                        <option value="retired" ${state.formData.status === 'retired' ? 'selected' : ''}>Retired</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Location</label>
+                                    <input type="text" id="editAssetLocation" value="${state.formData.location}" class="w-full px-3 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Assigned To</label>
+                                    <input type="text" id="editAssetAssignedTo" value="${state.formData.assignedTo}" class="w-full px-3 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Barcode</label>
+                                    <input type="text" id="editAssetBarcode" value="${state.formData.barcode}" class="w-full px-3 py-2 border rounded-lg" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Serial Number</label>
+                                    <input type="text" id="editAssetSerialNumber" value="${state.formData.serialNumber}" class="w-full px-3 py-2 border rounded-lg" />
+                                </div>
+                                <div class="col-span-2">
+                                    <label class="block text-sm font-medium mb-1">Notes</label>
+                                    <textarea id="editAssetNotes" class="w-full px-3 py-2 border rounded-lg" rows="3">${state.formData.notes}</textarea>
+                                </div>
+                            </div>
+                            <div class="flex gap-3 mt-6">
+                                <button onclick="submitUpdateAsset()" class="flex-1 bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700">
+                                    Update Asset
+                                </button>
+                                <button onclick="showArchiveDialog()" class="bg-orange-600 text-white px-6 py-3 rounded-lg hover:bg-orange-700">
+                                    Archive
+                                </button>
+                                <button onclick="closeEditAsset()" class="px-6 py-3 border rounded-lg">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAddFolderModal() {
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-xl shadow-2xl max-w-md w-full">
+                        <div class="px-6 py-4 border-b">
+                            <h2 class="text-xl font-bold">New Folder</h2>
+                        </div>
+                        <div class="p-6">
+                            <input type="text" id="folderName" value="${state.folderForm.name}" class="w-full px-3 py-2 border rounded-lg mb-4" placeholder="Folder name" />
+                            <div class="flex gap-3">
+                                <button onclick="submitAddFolder()" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg">
+                                    Create
+                                </button>
+                                <button onclick="toggleAddFolder()" class="px-6 py-2 border rounded-lg">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderScannerModal() {
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-xl shadow-2xl max-w-md w-full">
+                        <div class="px-6 py-4 border-b flex items-center justify-between">
+                            <h2 class="text-xl font-bold">Scan Barcode</h2>
+                            <button onclick="toggleScanner()">
+                                <div class="w-6 h-6">${icons.X()}</div>
+                            </button>
+                        </div>
+                        <div class="p-6">
+                            <div class="bg-gray-50 rounded-lg p-8 text-center mb-4">
+                                <div class="w-16 h-16 text-gray-400 mx-auto mb-4">${icons.Camera()}</div>
+                                <input type="text" id="scannedCode" value="${state.scannedCode}" class="w-full px-4 py-3 border-2 rounded-lg text-center text-lg" placeholder="Enter barcode..." />
+                            </div>
+                            <button onclick="submitScanBarcode()" class="w-full bg-blue-600 text-white px-4 py-3 rounded-lg">
+                                Lookup
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDashboardModal() {
+            const activeAssets = state.assets.filter(a => a.status === 'active').length;
+            const locations = new Set(state.assets.map(a => a.location).filter(Boolean)).size;
+            const assigned = state.assets.filter(a => a.assignedTo).length;
+            
+            const locationCounts = state.assets.reduce((acc, a) => {
+                const loc = a.location || 'Unassigned';
+                acc[loc] = (acc[loc] || 0) + 1;
+                return acc;
+            }, {});
+            
+            const employeeCounts = state.assets.filter(a => a.assignedTo).reduce((acc, a) => {
+                acc[a.assignedTo] = (acc[a.assignedTo] || 0) + 1;
+                return acc;
+            }, {});
+            
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+                        <div class="px-6 py-4 border-b flex items-center justify-between">
+                            <h2 class="text-2xl font-bold">Dashboard</h2>
+                            <button onclick="toggleDashboard()">
+                                <div class="w-6 h-6">${icons.X()}</div>
+                            </button>
+                        </div>
+                        <div class="p-6">
+                            <div class="grid grid-cols-4 gap-4 mb-6">
+                                <div class="bg-blue-500 text-white rounded-xl p-6">
+                                    <div class="text-sm mb-2">Total Assets</div>
+                                    <div class="text-3xl font-bold">${state.assets.length}</div>
+                                </div>
+                                <div class="bg-green-500 text-white rounded-xl p-6">
+                                    <div class="text-sm mb-2">Active</div>
+                                    <div class="text-3xl font-bold">${activeAssets}</div>
+                                </div>
+                                <div class="bg-purple-500 text-white rounded-xl p-6">
+                                    <div class="text-sm mb-2">Locations</div>
+                                    <div class="text-3xl font-bold">${locations}</div>
+                                </div>
+                                <div class="bg-orange-500 text-white rounded-xl p-6">
+                                    <div class="text-sm mb-2">Assigned</div>
+                                    <div class="text-3xl font-bold">${assigned}</div>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-6 mb-6">
+                                <div class="bg-white border rounded-xl p-6">
+                                    <h3 class="text-lg font-bold mb-4">Assets by Location</h3>
+                                    <div class="space-y-3">
+                                        ${Object.entries(locationCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([loc, count]) => `
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-gray-700">${loc}</span>
+                                                <span class="font-bold">${count}</span>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                
+                                <div class="bg-white border rounded-xl p-6">
+                                    <h3 class="text-lg font-bold mb-4">Assets by Employee</h3>
+                                    <div class="space-y-3">
+                                        ${Object.keys(employeeCounts).length > 0 ? Object.entries(employeeCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([emp, count]) => `
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-gray-700">${emp}</span>
+                                                <span class="font-bold">${count}</span>
+                                            </div>
+                                        `).join('') : '<div class="text-center text-gray-500 py-4">No assigned assets</div>'}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-white border rounded-xl p-6">
+                                <h3 class="text-lg font-bold mb-4">Status Overview</h3>
+                                <div class="grid grid-cols-4 gap-4">
+                                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                                        <div class="text-sm text-gray-700 mb-1">Active</div>
+                                        <div class="text-2xl font-bold">${state.assets.filter(a => a.status === 'active').length}</div>
+                                    </div>
+                                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                        <div class="text-sm text-gray-700 mb-1">Maintenance</div>
+                                        <div class="text-2xl font-bold">${state.assets.filter(a => a.status === 'maintenance').length}</div>
+                                    </div>
+                                    <div class="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                                        <div class="text-sm text-gray-700 mb-1">In Repair</div>
+                                        <div class="text-2xl font-bold">${state.assets.filter(a => a.status === 'in-repair').length}</div>
+                                    </div>
+                                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                        <div class="text-sm text-gray-700 mb-1">Retired</div>
+                                        <div class="text-2xl font-bold">${state.assets.filter(a => a.status === 'retired').length}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderArchiveModal() {
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+                        <div class="px-6 py-4 border-b flex items-center justify-between">
+                            <h2 class="text-2xl font-bold">Archived Assets (${state.archivedAssets.length})</h2>
+                            <button onclick="toggleArchive()">
+                                <div class="w-6 h-6">${icons.X()}</div>
+                            </button>
+                        </div>
+                        <div class="p-6">
+                            ${state.archivedAssets.length === 0 ? `
+                                <div class="text-center py-12">
+                                    <div class="w-16 h-16 text-gray-300 mx-auto mb-4">${icons.Package()}</div>
+                                    <p class="text-gray-500">No archived assets</p>
+                                </div>
+                            ` : `
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    ${state.archivedAssets.map(asset => `
+                                        <div class="bg-orange-50 border-2 border-orange-200 rounded-lg p-5">
+                                            <h3 class="font-semibold text-gray-900 mb-2">${asset.name}</h3>
+                                            <div class="space-y-1 text-sm text-gray-600 mb-3">
+                                                <div class="capitalize">${asset.type}</div>
+                                                ${asset.location ? `<div>${asset.location}</div>` : ''}
+                                                ${asset.archiveReason ? `
+                                                    <div class="mt-2 pt-2 border-t border-orange-200">
+                                                        <div class="font-medium text-orange-800">Reason:</div>
+                                                        <div>${asset.archiveReason}</div>
+                                                    </div>
+                                                ` : ''}
+                                                ${asset.archiveDescription ? `<div class="text-xs italic">${asset.archiveDescription}</div>` : ''}
+                                                <div class="text-xs text-gray-400 mt-2">
+                                                    Archived: ${new Date(asset.archivedAt).toLocaleDateString()}
+                                                </div>
+                                            </div>
+                                            <button onclick="restoreAsset('${asset.id}')" class="w-full bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 text-sm">
+                                                Restore
+                                            </button>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderArchiveDialog() {
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white rounded-xl shadow-2xl max-w-md w-full">
+                        <div class="px-6 py-4 border-b">
+                            <h2 class="text-xl font-bold">Archive Asset</h2>
+                        </div>
+                        <div class="p-6">
+                            <p class="text-gray-600 mb-4">
+                                Are you sure you want to archive "${state.selectedAsset?.name}"?
+                            </p>
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium mb-1">Reason (Optional)</label>
+                                <input type="text" id="archiveReason" value="${state.archiveReason}" class="w-full px-3 py-2 border rounded-lg" placeholder="e.g., Equipment outdated" />
+                            </div>
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium mb-1">Description (Optional)</label>
+                                <textarea id="archiveDescription" class="w-full px-3 py-2 border rounded-lg" rows="3" placeholder="Brief description...">${state.archiveDescription}</textarea>
+                            </div>
+                            <div class="flex gap-3">
+                                <button onclick="submitArchiveAsset()" class="flex-1 bg-orange-600 text-white px-4 py-3 rounded-lg hover:bg-orange-700">
+                                    Archive Asset
+                                </button>
+                                <button onclick="closeArchiveDialog()" class="px-6 py-3 border rounded-lg">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Event listeners
+        function attachEventListeners() {
+            const pinInput = document.getElementById('pinInput');
+            if (pinInput) {
+                pinInput.addEventListener('input', (e) => {
+                    state.pinInput = e.target.value;
+                });
+                pinInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') handlePinSubmit();
+                });
+            }
+
+            const pinSubmit = document.getElementById('pinSubmit');
+            if (pinSubmit) {
+                pinSubmit.addEventListener('click', handlePinSubmit);
+            }
+
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    state.searchTerm = e.target.value;
+                    render();
+                });
+            }
+
+            const filterStatus = document.getElementById('filterStatus');
+            if (filterStatus) {
+                filterStatus.addEventListener('change', (e) => {
+                    state.filterStatus = e.target.value;
+                    render();
+                });
+            }
+
+            const assetName = document.getElementById('assetName');
+            if (assetName) {
+                assetName.addEventListener('input', (e) => {
+                    state.formData.name = e.target.value;
+                });
+            }
+
+            const assetType = document.getElementById('assetType');
+            if (assetType) {
+                assetType.addEventListener('change', (e) => {
+                    state.formData.type = e.target.value;
+                });
+            }
+
+            const assetStatus = document.getElementById('assetStatus');
+            if (assetStatus) {
+                assetStatus.addEventListener('change', (e) => {
+                    state.formData.status = e.target.value;
+                });
+            }
+
+            const assetLocation = document.getElementById('assetLocation');
+            if (assetLocation) {
+                assetLocation.addEventListener('input', (e) => {
+                    state.formData.location = e.target.value;
+                });
+            }
+
+            const assetAssignedTo = document.getElementById('assetAssignedTo');
+            if (assetAssignedTo) {
+                assetAssignedTo.addEventListener('input', (e) => {
+                    state.formData.assignedTo = e.target.value;
+                });
+            }
+
+            const assetBarcode = document.getElementById('assetBarcode');
+            if (assetBarcode) {
+                assetBarcode.addEventListener('input', (e) => {
+                    state.formData.barcode = e.target.value;
+                });
+            }
+
+            const assetSerialNumber = document.getElementById('assetSerialNumber');
+            if (assetSerialNumber) {
+                assetSerialNumber.addEventListener('input', (e) => {
+                    state.formData.serialNumber = e.target.value;
+                });
+            }
+
+            // Edit form listeners
+            const editAssetName = document.getElementById('editAssetName');
+            if (editAssetName) {
+                editAssetName.addEventListener('input', (e) => {
+                    state.formData.name = e.target.value;
+                });
+            }
+
+            const editAssetType = document.getElementById('editAssetType');
+            if (editAssetType) {
+                editAssetType.addEventListener('change', (e) => {
+                    state.formData.type = e.target.value;
+                });
+            }
+
+            const editAssetStatus = document.getElementById('editAssetStatus');
+            if (editAssetStatus) {
+                editAssetStatus.addEventListener('change', (e) => {
+                    state.formData.status = e.target.value;
+                });
+            }
+
+            const editAssetLocation = document.getElementById('editAssetLocation');
+            if (editAssetLocation) {
+                editAssetLocation.addEventListener('input', (e) => {
+                    state.formData.location = e.target.value;
+                });
+            }
+
+            const editAssetAssignedTo = document.getElementById('editAssetAssignedTo');
+            if (editAssetAssignedTo) {
+                editAssetAssignedTo.addEventListener('input', (e) => {
+                    state.formData.assignedTo = e.target.value;
+                });
+            }
+
+            const editAssetBarcode = document.getElementById('editAssetBarcode');
+            if (editAssetBarcode) {
+                editAssetBarcode.addEventListener('input', (e) => {
+                    state.formData.barcode = e.target.value;
+                });
+            }
+
+            const editAssetSerialNumber = document.getElementById('editAssetSerialNumber');
+            if (editAssetSerialNumber) {
+                editAssetSerialNumber.addEventListener('input', (e) => {
+                    state.formData.serialNumber = e.target.value;
+                });
+            }
+
+            const editAssetNotes = document.getElementById('editAssetNotes');
+            if (editAssetNotes) {
+                editAssetNotes.addEventListener('input', (e) => {
+                    state.formData.notes = e.target.value;
+                });
+            }
+
+            const folderName = document.getElementById('folderName');
+            if (folderName) {
+                folderName.addEventListener('input', (e) => {
+                    state.folderForm.name = e.target.value;
+                });
+            }
+
+            const scannedCode = document.getElementById('scannedCode');
+            if (scannedCode) {
+                scannedCode.addEventListener('input', (e) => {
+                    state.scannedCode = e.target.value;
+                });
+                scannedCode.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') handleScanBarcode();
+                });
+            }
+
+            const archiveReason = document.getElementById('archiveReason');
+            if (archiveReason) {
+                archiveReason.addEventListener('input', (e) => {
+                    state.archiveReason = e.target.value;
+                });
+            }
+
+            const archiveDescription = document.getElementById('archiveDescription');
+            if (archiveDescription) {
+                archiveDescription.addEventListener('input', (e) => {
+                    state.archiveDescription = e.target.value;
+                });
+            }
+        }
+
+        // Global functions for onclick handlers
+        window.setCurrentFolder = (folderId) => {
+            state.currentFolder = folderId === 'null' ? null : folderId;
+            render();
+        };
+
+        window.setViewMode = (mode) => {
+            state.viewMode = mode;
+            render();
+        };
+
+        window.toggleAddAsset = () => {
+            state.showAddAsset = !state.showAddAsset;
+            if (state.showAddAsset) {
+                state.formData = {
+                    name: '',
+                    type: 'computer',
+                    location: '',
+                    status: 'active',
+                    serialNumber: '',
+                    barcode: '',
+                    assignedTo: '',
+                    notes: '',
+                    condition: 'good',
+                    purchaseDate: '',
+                    folderId: state.currentFolder
+                };
+            }
+            render();
+        };
+
+        window.toggleAddFolder = () => {
+            state.showAddFolder = !state.showAddFolder;
+            if (state.showAddFolder) {
+                state.folderForm = { name: '', parentId: null };
+            }
+            render();
+        };
+
+        window.toggleScanner = () => {
+            state.showScanner = !state.showScanner;
+            state.scannedCode = '';
+            render();
+        };
+
+        window.toggleDashboard = () => {
+            state.showDashboard = !state.showDashboard;
+            render();
+        };
+
+        window.toggleArchive = () => {
+            state.showArchive = !state.showArchive;
+            render();
+        };
+
+        window.viewAssetDetail = (assetId) => {
+            const asset = state.assets.find(a => a.id === assetId);
+            if (asset) {
+                state.selectedAsset = asset;
+                state.showAssetDetail = true;
+                render();
+            }
+        };
+
+        window.closeAssetDetail = () => {
+            state.showAssetDetail = false;
+            state.selectedAsset = null;
+            render();
+        };
+
+        window.editAsset = (assetId) => {
+            const asset = state.assets.find(a => a.id === assetId);
+            if (asset) {
+                handleEditAsset(asset);
+            }
+        };
+
+        window.closeEditAsset = () => {
+            state.showEditAsset = false;
+            state.selectedAsset = null;
+            render();
+        };
+
+        window.showArchiveDialog = () => {
+            state.showArchiveDialog = true;
+            state.archiveReason = '';
+            state.archiveDescription = '';
+            render();
+        };
+
+        window.closeArchiveDialog = () => {
+            state.showArchiveDialog = false;
+            state.archiveReason = '';
+            state.archiveDescription = '';
+            render();
+        };
+
+        window.submitAddAsset = () => {
+            handleAddAsset();
+        };
+
+        window.submitUpdateAsset = () => {
+            handleUpdateAsset();
+        };
+
+        window.submitAddFolder = () => {
+            handleAddFolder();
+        };
+
+        window.submitScanBarcode = () => {
+            handleScanBarcode();
+        };
+
+        window.submitArchiveAsset = () => {
+            handleArchiveAsset();
+        };
+
+        window.restoreAsset = (assetId) => {
+            handleRestoreFromArchive(assetId);
+        };
+
+        // Start the app
+        init();
+    </script>
+</body>
+</html>
