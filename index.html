@@ -11,6 +11,13 @@
             padding: 0;
             box-sizing: border-box;
         }
+        :root {
+            --primary-color: #565295;
+            --primary-hover: #454178;
+            --primary-light: #E8E5F2;
+            --secondary-color: #FFFFFF;
+            --text-color: #000000;
+        }
     </style>
 </head>
 <body class="bg-gray-50">
@@ -360,13 +367,13 @@
                 <div class="min-h-screen bg-gray-50 flex items-center justify-center p-6">
                     <div class="bg-white rounded-xl shadow-lg p-8 w-full max-w-md">
                         <div class="flex items-center justify-center mb-6">
-                            <div class="bg-blue-100 p-4 rounded-full">
-                                <div class="w-10 h-10 text-blue-600">${icons.Lock()}</div>
+                            <div class="bg-blue-100 p-4 rounded-full" style="background-color: #E8F4F8;">
+                                <div class="w-10 h-10 text-blue-600" style="color: #00A6CE;">${icons.Lock()}</div>
                             </div>
                         </div>
-                        <h1 class="text-3xl font-bold text-center text-gray-900 mb-2">Asset Tracker</h1>
+                        <h1 class="text-3xl font-bold text-center mb-2" style="color: #00536C;">Asset Tracker</h1>
                         <p class="text-center text-gray-600 mb-8">
-                            ${state.storedPin ? 'Enter your PIN to continue' : 'Set up your PIN to get started'}
+                            Enter your PIN to continue
                         </p>
                         <input
                             type="password"
@@ -379,9 +386,10 @@
                         ${state.pinError ? `<div class="text-red-600 text-sm text-center mb-4">${state.pinError}</div>` : ''}
                         <button
                             id="pinSubmit"
-                            class="w-full bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 font-medium"
+                            class="w-full text-white px-4 py-3 rounded-lg font-medium"
+                            style="background-color: #00A6CE; hover:background-color: #00536C;"
                         >
-                            ${state.storedPin ? 'Unlock' : 'Create PIN'}
+                            Unlock
                         </button>
                     </div>
                 </div>
